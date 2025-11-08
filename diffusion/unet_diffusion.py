@@ -5,11 +5,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Tuple, Optional, Dict
 
-from models.pretrained_encoders import (
-    PretrainedResNetEncoder,
-    PretrainedVAEEncoder,
-    PretrainedStyleGANEncoder
-)
+# from models.pretrained_encoders import (
+#     PretrainedResNetEncoder,
+#     PretrainedVAEEncoder,
+#     PretrainedStyleGANEncoder
+# )
 
 class UNetDiffusion(nn.Module):
     def __init__(
@@ -54,38 +54,38 @@ class UNetDiffusion(nn.Module):
         )
 
         # ---------- ENCODER SELECTION ----------
-        if pretrained_encoder == "resnet":
-            self.encoder = PretrainedResNetEncoder(
-                model_name="resnet50",
-                pretrained="imagenet",
-                frozen_stages=freeze_encoder_stages,
-                output_channels=hidden_dims,
-            )
-        elif pretrained_encoder == "vggface":
-            self.encoder = PretrainedResNetEncoder(
-                model_name="resnet50",
-                pretrained="vggface2",
-                frozen_stages=freeze_encoder_stages,
-                output_channels=hidden_dims,
-            )
-        elif pretrained_encoder == "vae" and encoder_checkpoint:
-            self.encoder = PretrainedVAEEncoder(
-                checkpoint_path=encoder_checkpoint,
-                frozen=(freeze_encoder_stages > 0),
-            )
-        elif pretrained_encoder == "stylegan":
-            self.encoder = PretrainedStyleGANEncoder(
-                model_path=encoder_checkpoint,
-                frozen_layers=freeze_encoder_stages,
-            )
-        else:
-            self.encoder = UNetEncoder(
-                input_channels=input_channels,
-                hidden_dims=hidden_dims,
-                time_emb_dim=time_emb_dim,
-                use_attention=use_attention,
-                attention_blocks=attention_blocks
-            )
+        # if pretrained_encoder == "resnet":
+        #     self.encoder = PretrainedResNetEncoder(
+        #         model_name="resnet50",
+        #         pretrained="imagenet",
+        #         frozen_stages=freeze_encoder_stages,
+        #         output_channels=hidden_dims,
+        #     )
+        # elif pretrained_encoder == "vggface":
+        #     self.encoder = PretrainedResNetEncoder(
+        #         model_name="resnet50",
+        #         pretrained="vggface2",
+        #         frozen_stages=freeze_encoder_stages,
+        #         output_channels=hidden_dims,
+        #     )
+        # elif pretrained_encoder == "vae" and encoder_checkpoint:
+        #     self.encoder = PretrainedVAEEncoder(
+        #         checkpoint_path=encoder_checkpoint,
+        #         frozen=(freeze_encoder_stages > 0),
+        #     )
+        # elif pretrained_encoder == "stylegan":
+        #     self.encoder = PretrainedStyleGANEncoder(
+        #         model_path=encoder_checkpoint,
+        #         frozen_layers=freeze_encoder_stages,
+        #     )
+        # else:
+        self.encoder = UNetEncoder(
+            input_channels=input_channels,
+            hidden_dims=hidden_dims,
+            time_emb_dim=time_emb_dim,
+            use_attention=use_attention,
+            attention_blocks=attention_blocks
+        )
         
         # Decoder
         self.decoder = UNetDecoder(

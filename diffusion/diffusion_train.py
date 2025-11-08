@@ -3,19 +3,20 @@ from torch.utils.data import DataLoader
 import sys
 import os
 
-
-# Add project root to path (works from any directory)
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Ensure the project root (the directory containing diffusion/, data/, etc.) is in sys.path
+project_root = os.path.dirname(os.path.abspath(__file__))  # e.g. .../in_paint_structure/diffusion
+project_root = os.path.dirname(project_root)               # go one level up → .../in_paint_structure
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from config import default_config, pretrained_config, Config
-from config.noise_scheduler_config import NoiseConfig
+
+from config import Config
+from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
-from models.unet_diffusion import UNetDiffusion, NoiseScheduler
-from losses.diffusion_loss import DiffusionLossPerImage
-from training.diffusion_trainer import DiffusionTrainer
-from masking.mask_generator import MaskGenerator
+from unet_diffusion import UNetDiffusion, NoiseScheduler
+from diffusion_loss import DiffusionLossPerImage
+from diffusion_trainer import DiffusionTrainer
+from scripts.mask_generator import MaskGenerator
 
 
 def main():
