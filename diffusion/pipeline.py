@@ -1,8 +1,8 @@
 import os
 import sys
-# Ensure the project root (the directory containing diffusion/, data/, etc.) is in sys.path
-project_root = os.path.dirname(os.path.abspath(__file__))  # e.g. .../in_paint_structure/diffusion
-project_root = os.path.dirname(project_root)               # go one level up → .../in_paint_structure
+
+project_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(project_root)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 

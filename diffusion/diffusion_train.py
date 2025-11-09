@@ -14,7 +14,7 @@ from config import Config
 from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
 from unet_diffusion import UNetDiffusion, NoiseScheduler
-from diffusion_loss import DiffusionLossPerImage
+from diffusion_loss import DiffusionLossPerImage, DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
 from scripts.mask_generator import MaskGenerator
 
@@ -81,7 +81,7 @@ def main():
     )
 
     # Create loss function
-    loss_fn = DiffusionLossPerImage()
+    loss_fn = DiffusionLoss()
 
     # Create trainer
     trainer = DiffusionTrainer(

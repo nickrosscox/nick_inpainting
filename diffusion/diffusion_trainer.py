@@ -39,7 +39,7 @@ class DiffusionTrainer:
 
         # Training parameters
         self.num_epochs = config.training.epochs
-        #self.num_epochs = 2
+        self.num_epochs = 1
         self.num_timesteps = noise_scheduler.num_timesteps
 
         # --- EMA setup (optional) ---
@@ -86,6 +86,50 @@ class DiffusionTrainer:
 
             # Add noise (only masked region)
             noisy_images, noise = self.noise_scheduler.add_noise(images, t, masks)
+
+            # ====== DEBUG BLOCK (only for first batch) ======
+            if epoch == 1 and batch_idx == 0:
+                import torchvision.utils as vutils
+                import matplotlib.pyplot as plt
+                import os
+
+                debug_dir = os.path.join(self.config.logging.checkpoint_dir, "debug_inputs")
+                os.makedirs(debug_dir, exist_ok=True)
+
+                print(f"\n[DEBUG] Epoch {epoch}, Batch {batch_idx}")
+                print(f"Images shape:       {images.shape}")
+                print(f"Noisy images shape: {noisy_images.shape}")
+                print(f"Mask shape:         {masks.shape}")
+                print(f"t range: [{t.min().item()}, {t.max().item()}]")
+                print(f"Mask mean value (should be ~0.1–0.4): {masks.mean().item():.4f}")
+
+                # Verify channel composition
+                combined_input = torch.cat([noisy_images, masks.repeat(1,3,1,1)], dim=0)
+                vutils.save_image(combined_input, os.path.join(debug_dir, "noisy_plus_mask.png"),
+                                nrow=8, normalize=True, value_range=(-1,1))
+                print(f"[DEBUG] Saved noisy+mask composite grid to {debug_dir}/noisy_plus_mask.png")
+
+                # Visualize each channel separately
+                for c in range(3):
+                    vutils.save_image(noisy_images[:, c:c+1],
+                                    os.path.join(debug_dir, f"noisy_channel_{c}.png"),
+                                    nrow=8, normalize=True, value_range=(-1,1))
+                vutils.save_image(masks, os.path.join(debug_dir, "mask_channel.png"),
+                                nrow=8, normalize=True, value_range=(0,1))
+                print(f"[DEBUG] Saved RGB + mask channels separately for manual inspection")
+
+                # Quick sanity figure
+                img_show = (noisy_images[0].detach().cpu().permute(1,2,0) + 1)/2
+                mask_show = masks[0].detach().cpu().permute(1,2,0)
+                plt.figure(figsize=(10,4))
+                plt.subplot(1,3,1); plt.imshow(((images[0].cpu().permute(1,2,0)+1)/2).clamp(0,1)); plt.title("Original")
+                plt.subplot(1,3,2); plt.imshow(mask_show, cmap="gray"); plt.title("Mask")
+                plt.subplot(1,3,3); plt.imshow(img_show.clamp(0,1)); plt.title("Noisy Image Input")
+                plt.tight_layout()
+                plt.savefig(os.path.join(debug_dir, "debug_triplet.png"))
+                plt.close()
+            # ====== END DEBUG BLOCK ======
+
 
             # Forward pass
             predicted_noise = self.model(noisy_images, t, masks)

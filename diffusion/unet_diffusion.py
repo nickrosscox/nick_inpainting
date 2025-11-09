@@ -100,8 +100,10 @@ class UNetDiffusion(nn.Module):
         # Compute time embedding ONCE
         t_emb = self.time_mlp(t)  # [B, 256]
         
+        # apply mask
+        masked_input = x * (1 - mask)
         # Concatenate image with mask
-        x_input = torch.cat([x, mask], dim=1)
+        x_input = torch.cat([masked_input, mask], dim=1)
         
         # Pass time embedding to encoder and decoder
         features, skip_connections = self.encoder(x_input, t_emb)
@@ -268,7 +270,7 @@ class UNetEncoder(nn.Module):
             in_channels = out_channels
     
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        (f"[DEBUG] Encoder received: {x.shape}")
+        #(f"[DEBUG] Encoder received: {x.shape}")
         skip_connections = []
         
         for block, attention in zip(self.blocks, self.attention_blocks):

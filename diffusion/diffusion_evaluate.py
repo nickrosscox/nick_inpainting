@@ -18,27 +18,28 @@ from evaluation.metrics import InpaintingMetrics
 
 
 @torch.no_grad()
-def sample_ddpm(model, scheduler, images, mask, num_timesteps=None):
+def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     """
     Perform DDPM reverse sampling for inpainting.
-    Model predicts noise ε_θ(x_t, t).
-    
+    Starts from pre-noised masked input (x_t).
+
     Args:
-        model: trained UNet predicting noise
+        model: trained UNet predicting noise ε_θ(x_t, t)
         scheduler: NoiseScheduler instance
-        images: clean original images [B, 3, H, W]
+        x_t: pre-noised masked image [B, 3, H, W]
         mask: binary mask [B, 1, H, W] (1 = region to inpaint)
         num_timesteps: optional override for number of reverse steps
+
     Returns:
         x_0_pred: final denoised reconstruction [B, 3, H, W]
     """
-    device = images.device
-    B = images.size(0)
+    import torchvision.utils as vutils
+    device = x_t.device
+    B = x_t.size(0)
     T = scheduler.num_timesteps if num_timesteps is None else num_timesteps
 
-    # start from pure noise in masked region, keep original in known region
-    t_full = torch.full((B,), T - 1, device=device, dtype=torch.long)
-    x_t, _ = scheduler.add_noise(images, t_full, mask)
+    # make a copy to avoid overwriting the input tensor
+    x_t = x_t.clone()
 
     for step in reversed(range(T)):
         t = torch.full((B,), step, device=device, dtype=torch.long)
@@ -47,33 +48,33 @@ def sample_ddpm(model, scheduler, images, mask, num_timesteps=None):
         eps_pred = model(x_t, t, mask)
 
         # gather scalar coefficients
-        beta_t       = scheduler.betas[t]              # [B]
-        alpha_t      = scheduler.alphas[t]             # [B]
-        alpha_bar_t  = scheduler.alpha_bars[t]         # [B]
+        beta_t = scheduler.betas[t]                # [B]
+        alpha_t = scheduler.alphas[t]              # [B]
+        alpha_bar_t = scheduler.alpha_bars[t]      # [B]
         alpha_bar_prev = scheduler.alpha_bars_prev[t]  # [B]
 
-        # posterior variance  (Eq. 7)
-        posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t  # [B]
+        # posterior variance (Eq. 7)
+        posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t
 
-        # mean using ε-parameterization  (Eq. 12)
+        # mean using ε-parameterization (Eq. 12)
         mean = (1.0 / torch.sqrt(alpha_t))[:, None, None, None] * (
             x_t - (beta_t / torch.sqrt(1 - alpha_bar_t))[:, None, None, None] * eps_pred
         )
 
+        # print("mask shape:", mask.shape, "x_t shape:", x_t.shape)
         # add noise except at t = 0
-        if step > 0:
-            noise = torch.randn_like(x_t)
-            x_t = mean + torch.sqrt(posterior_var)[:, None, None, None] * noise
-        else:
-            x_t = mean
+        # if step > 0:
+        #     noise = torch.randn_like(x_t)
+        #     noise = noise * mask
+        #     x_t = mean + torch.sqrt(posterior_var)[:, None, None, None] * noise
+        # else:
+        #     x_t = mean
 
-        # Re-inject known (unmasked) pixels every step  (RePaint trick)
-        x_t = mask * x_t + (1 - mask) * images
-
-    # clamp final output to valid range
-    x_0_pred = x_t.clamp(-1, 1)
-    return x_0_pred
-
+        x_t = mean
+        
+        # Re-inject known (unmasked) pixels — keep unmasked parts fixed
+        #x_t = (1 - mask) * x_t + mask * x_t  # mask already defines inpaint region
+    return x_t
 
 
 def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, save_dir='results/diffusion'):
@@ -81,6 +82,9 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     Run comprehensive evaluation on test set.
     """
     model.eval()
+
+    import torchvision.utils as vutils
+    import os
     
     # Create save directory
     os.makedirs(save_dir, exist_ok=True)
@@ -97,6 +101,10 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     
     print("\nStarting evaluation...")
     print(f"Computing: PSNR, LPIPS, MSE, MAE")
+    out_dir = "./runs/eval_debug"
+    os.makedirs(out_dir, exist_ok=True)
+
+
     
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
         images = batch['image'].to(device)
@@ -110,22 +118,57 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             shape=(1, H, W)
         ).to(device)
 
-        # # ADD THIS DEBUG:
-        # print(f"Mask shape: {masks.shape}")
-        # print(f"Mask unique values: {masks.unique()}")
-        # print(f"Mask mean (should be ~0.1-0.3 if 1=inpaint): {masks.mean():.3f}")
+        # ADD THIS DEBUG:
+        print(f"Mask shape: {masks.shape}")
+        print(f"Mask unique values: {masks.unique()}")
+        print(f"Mask mean (should be ~0.1-0.3 if 1=inpaint): {masks.mean():.3f}")
 
-        # # Check what masked_input looks like:
-        # masked_input = images * (1 - masks)
-        # print(f"Masked input mean: {masked_input.mean():.3f}")
-        # print(f"Does masked_input show black holes? (should be True)")
+        # Check what masked_input looks like:
+        masked_input = images * (1 - masks)
+        print(f"Masked input mean: {masked_input.mean():.3f}")
+        print(f"Does masked_input show black holes? (should be True)")
         
         # Add full noise to masked regions (start from complete noise)
-        # t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
-        # noisy_images, _ = noise_scheduler.add_noise(images, t, masks)
-        
+
+
+        t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
+
+        noisy_images, _ = noise_scheduler.add_noise(images, t, masks)
+
+        N = min(8, B)
+        clean_subset = images[:N]
+        noisy_subset = noisy_images[:N]
+
+        # Normalize to [0,1] for saving
+        # vutils.save_image(
+        #     (clean_subset + 1) / 2,  # assuming images in [-1,1]
+        #     os.path.join(out_dir, "debug_clean_batch.png"),
+        #     nrow=N,
+        # )
+        # vutils.save_image(
+        #     (noisy_subset + 1) / 2,
+        #     os.path.join(out_dir, "debug_noisy_batch.png"),
+        #     nrow=N,
+        # )
+
         # Denoise using DDPM sampling
-        inpainted = sample_ddpm(model, noise_scheduler, images, masks, num_timesteps=50)
+        inpainted = sample_ddpm(model, noise_scheduler, noisy_images, masks, num_timesteps=50)
+
+        # # --- Save first 8 inpainted samples ---
+        # N = min(8, inpainted.shape[0])  # just to be safe if batch < 8
+        # inpainted_subset = inpainted[:N]
+
+        # # Normalize from [-1,1] → [0,1] for saving
+        # vutils.save_image(
+        #     (inpainted_subset + 1) / 2,
+        #     os.path.join(out_dir, "debug_inpainted_batch.png"),
+        #     nrow=N,
+        # )
+
+        # print(f"[DEBUG] Saved inpainted batch preview → {os.path.join(out_dir, 'debug_inpainted_batch.png')}")
+
+        # Denoise using DDPM sampling
+        # inpainted = sample_ddpm(model, noise_scheduler, images, masks, num_timesteps=50)
         
         # Compute all metrics on full images
         psnr_val = metrics_calc.psnr(inpainted, images)
@@ -238,7 +281,7 @@ def evaluate():
     ).to(device)
     
     # Load checkpoint
-    checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_best_model.pt')
+    checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_final_model.pt')
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
     
