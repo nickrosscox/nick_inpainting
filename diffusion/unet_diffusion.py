@@ -102,9 +102,9 @@ class UNetDiffusion(nn.Module):
         t_emb = self.time_mlp(t)  # [B, 256]
         
         # apply mask
-        masked_input = x * (1 - mask)
+        # masked_input = x * (1 - mask)
         # Concatenate image with mask
-        x_input = torch.cat([masked_input, mask], dim=1)
+        x_input = torch.cat([x, mask], dim=1)
         
         # Pass time embedding to encoder and decoder
         features, skip_connections = self.encoder(x_input, t_emb)
@@ -148,7 +148,9 @@ class NoiseScheduler:
         self.alpha_bars = torch.cumprod(self.alphas, dim=0)  # Cumulative product
         
         # For sampling (reverse process)
-        self.alpha_bars_prev = np.append(1.0, self.alphas_bars[:-1])
+        #self.alpha_bars_prev = np.append(1.0, self.alpha_bars[:-1])
+        alpha_bars_prev_np = np.append(1.0, self.alpha_bars[:-1].cpu().numpy())
+        self.alpha_bars_prev = torch.from_numpy(alpha_bars_prev_np).float()
     
     def _cosine_beta_schedule(self, timesteps, s=0.008):
         """Cosine schedule as proposed in https://arxiv.org/abs/2102.09672"""

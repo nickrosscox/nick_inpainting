@@ -39,7 +39,7 @@ class DiffusionTrainer:
 
         # Training parameters
         self.num_epochs = config.training.epochs
-        self.num_epochs = 3
+        self.num_epochs = 2
         self.num_timesteps = noise_scheduler.num_timesteps
 
         # --- EMA setup (optional) ---
