@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Tuple, Optional, Dict
+import numpy as np
 
 # from models.pretrained_encoders import (
 #     PretrainedResNetEncoder,
@@ -123,7 +124,7 @@ class NoiseScheduler:
         num_timesteps: int = 100,
         beta_start: float = 0.0001,
         beta_end: float = 0.02,
-        schedule_type: str = 'cosine'
+        schedule_type: str = 'linear'
     ):
         """
         Args:
@@ -147,7 +148,7 @@ class NoiseScheduler:
         self.alpha_bars = torch.cumprod(self.alphas, dim=0)  # Cumulative product
         
         # For sampling (reverse process)
-        self.alpha_bars_prev = F.pad(self.alpha_bars[:-1], (1, 0), value=1.0)
+        self.alpha_bars_prev = np.append(1.0, self.alphas_bars[:-1])
     
     def _cosine_beta_schedule(self, timesteps, s=0.008):
         """Cosine schedule as proposed in https://arxiv.org/abs/2102.09672"""

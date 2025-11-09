@@ -38,6 +38,9 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     B = x_t.size(0)
     T = scheduler.num_timesteps if num_timesteps is None else num_timesteps
 
+    save_dir = "./runs/eval_debug"
+    os.makedirs(save_dir, exist_ok=True)
+
     # make a copy to avoid overwriting the input tensor
     x_t = x_t.clone()
 
@@ -46,6 +49,10 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
 
         # predict noise ε
         eps_pred = model(x_t, t, mask)
+
+        if step % 100 == 0:
+            print(eps_pred.shape)
+            vutils.save_image(eps_pred, f'eps_pred_step_{step}.png')
 
         # gather scalar coefficients
         alpha_t = scheduler.alphas[t]              # [B]
@@ -63,7 +70,7 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
             sigma_t = torch.zeros_like(alpha_t)
 
         # posterior variance (Eq. 7)
-        posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t
+        # posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t
 
         # mean using ε-parameterization (Eq. 12)
         mean = (1.0 / torch.sqrt(alpha_t))[:, None, None, None] * (
