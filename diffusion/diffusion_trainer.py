@@ -173,9 +173,9 @@ class DiffusionTrainer:
             else:
                 epochs_no_improve += 1
 
-            if epochs_no_improve >= self.patience:
-                print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
-                break
+            # if epochs_no_improve >= self.patience:
+            #     print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
+            #     break
 
         print(f"\n🏁 Training complete — Best validation loss: {best_val_loss:.4f}")
 

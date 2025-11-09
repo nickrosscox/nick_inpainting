@@ -95,7 +95,7 @@ def main():
         train_mask_generator=train_mask_generator,  # Random for training
         val_mask_generator=val_mask_generator, # Deterministic for Validation
         patience=10,
-        use_ema=False
+        use_ema=True
     )
 
     # Start training

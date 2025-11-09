@@ -6,7 +6,7 @@ class NoiseConfig:
     """Configuration for diffusion model training and sampling."""
     
     # Noise scheduler parameters
-    num_timesteps: int = 1000
+    num_timesteps: int = 100
     beta_start: float = 0.0001
     beta_end: float = 0.02
     schedule_type: str = 'cosine'  # 'linear' or 'cosine'

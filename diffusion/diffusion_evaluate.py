@@ -109,13 +109,23 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             filenames=filenames,
             shape=(1, H, W)
         ).to(device)
+
+        # # ADD THIS DEBUG:
+        # print(f"Mask shape: {masks.shape}")
+        # print(f"Mask unique values: {masks.unique()}")
+        # print(f"Mask mean (should be ~0.1-0.3 if 1=inpaint): {masks.mean():.3f}")
+
+        # # Check what masked_input looks like:
+        # masked_input = images * (1 - masks)
+        # print(f"Masked input mean: {masked_input.mean():.3f}")
+        # print(f"Does masked_input show black holes? (should be True)")
         
         # Add full noise to masked regions (start from complete noise)
-        t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
+        # t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
         # noisy_images, _ = noise_scheduler.add_noise(images, t, masks)
         
         # Denoise using DDPM sampling
-        inpainted = sample_ddpm(model, noise_scheduler, images, masks)
+        inpainted = sample_ddpm(model, noise_scheduler, images, masks, num_timesteps=50)
         
         # Compute all metrics on full images
         psnr_val = metrics_calc.psnr(inpainted, images)

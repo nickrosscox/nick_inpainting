@@ -268,6 +268,7 @@ class UNetEncoder(nn.Module):
             in_channels = out_channels
     
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        (f"[DEBUG] Encoder received: {x.shape}")
         skip_connections = []
         
         for block, attention in zip(self.blocks, self.attention_blocks):
