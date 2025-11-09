@@ -70,12 +70,7 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
             x_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_bar_t))[:, None, None, None] * eps_pred
         ) + sigma_t[:, None, None, None] * z
 
-        # add noise except at t = 0
-        if step > 0:
-            noise = torch.randn_like(x_t)
-            x_t = mean + torch.sqrt(posterior_var)[:, None, None, None] * (noise * mask)
-        else:
-            x_t = mean
+        x_t = mean * mask + (1-mask) * x_t
     return x_t
 
 
