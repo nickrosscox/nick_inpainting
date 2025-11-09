@@ -48,32 +48,34 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
         eps_pred = model(x_t, t, mask)
 
         # gather scalar coefficients
-        beta_t = scheduler.betas[t]                # [B]
         alpha_t = scheduler.alphas[t]              # [B]
         alpha_bar_t = scheduler.alpha_bars[t]      # [B]
-        alpha_bar_prev = scheduler.alpha_bars_prev[t]  # [B]
+
+
+        if step > 0:
+            z = torch.randn_like(x_t)
+            alpha_bar_prev = scheduler.alpha_bars_prev[t]
+            beta_t = scheduler.betas[t]
+            # σ_t from posterior variance (Eq. 7)
+            sigma_t = torch.sqrt(((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t)
+        else:
+            z = torch.zeros_like(x_t)
+            sigma_t = torch.zeros_like(alpha_t)
 
         # posterior variance (Eq. 7)
         posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t
 
         # mean using ε-parameterization (Eq. 12)
         mean = (1.0 / torch.sqrt(alpha_t))[:, None, None, None] * (
-            x_t - (beta_t / torch.sqrt(1 - alpha_bar_t))[:, None, None, None] * eps_pred
-        )
+            x_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_bar_t))[:, None, None, None] * eps_pred
+        ) + sigma_t[:, None, None, None] * z
 
-        # print("mask shape:", mask.shape, "x_t shape:", x_t.shape)
         # add noise except at t = 0
-        # if step > 0:
-        #     noise = torch.randn_like(x_t)
-        #     noise = noise * mask
-        #     x_t = mean + torch.sqrt(posterior_var)[:, None, None, None] * noise
-        # else:
-        #     x_t = mean
-
-        x_t = mean
-        
-        # Re-inject known (unmasked) pixels — keep unmasked parts fixed
-        #x_t = (1 - mask) * x_t + mask * x_t  # mask already defines inpaint region
+        if step > 0:
+            noise = torch.randn_like(x_t)
+            x_t = mean + torch.sqrt(posterior_var)[:, None, None, None] * (noise * mask)
+        else:
+            x_t = mean
     return x_t
 
 
