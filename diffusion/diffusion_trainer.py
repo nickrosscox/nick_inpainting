@@ -177,6 +177,8 @@ class DiffusionTrainer:
             #     print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
             #     break
 
+        self.save_checkpoint(epoch, "diffusion_final_model.pt")
+        print("💾 Final model saved after all epochs.")
         print(f"\n🏁 Training complete — Best validation loss: {best_val_loss:.4f}")
 
     # -------------------------------------------------------------------------

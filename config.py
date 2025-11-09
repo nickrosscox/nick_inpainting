@@ -26,7 +26,7 @@ class TrainingConfig:
     learning_rate: float = 0.0002
     beta1: float = 0.5
     beta2: float = 0.999
-    epochs: int = 60
+    epochs: int = 50
     gradient_clip: float = 1.0
     kl_weight: float = 0.001
     perceptual_weight: float = 0.1
