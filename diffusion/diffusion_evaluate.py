@@ -42,42 +42,34 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     os.makedirs(save_dir, exist_ok=True)
 
     # make a copy to avoid overwriting the input tensor
+    mask_3c = mask.repeat(1, x_t.size(1), 1, 1)
     x_t = x_t.clone()
 
-    for step in reversed(range(T)):
-        t = torch.full((B,), step, device=device, dtype=torch.long)
+    for t_step in reversed(range(T)):
+        t = torch.full((B,), t_step, device=device, dtype=torch.long)
 
         # predict noise ε
         eps_pred = model(x_t, t, mask)
 
-        if step % 100 == 0:
-            print(eps_pred.shape)
-            vutils.save_image(eps_pred, f'eps_pred_step_{step}.png')
+        if t_step > 0:
+            z = torch.randn_like(x_t)
+        else:
+            z = torch.zeros_like(x_t)
 
         # gather scalar coefficients
         alpha_t = scheduler.alphas[t]              # [B]
         alpha_bar_t = scheduler.alpha_bars[t]      # [B]
 
-
-        if step > 0:
-            z = torch.randn_like(x_t)
-            alpha_bar_prev = scheduler.alpha_bars_prev[t]
-            beta_t = scheduler.betas[t]
-            # σ_t from posterior variance (Eq. 7)
-            sigma_t = torch.sqrt(((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t)
-        else:
-            z = torch.zeros_like(x_t)
-            sigma_t = torch.zeros_like(alpha_t)
-
-        # posterior variance (Eq. 7)
-        # posterior_var = ((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * beta_t
+        beta_t = scheduler.betas[t]
+        sigma_t = torch.sqrt(beta_t)
 
         # mean using ε-parameterization (Eq. 12)
-        mean = (1.0 / torch.sqrt(alpha_t))[:, None, None, None] * (
+        x_mean = (1.0 / torch.sqrt(alpha_t))[:, None, None, None] * (
             x_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_bar_t))[:, None, None, None] * eps_pred
-        ) + sigma_t[:, None, None, None] * z
+        )
+        x_t_minus_1 = x_mean + sigma_t[:, None, None, None] * z
 
-        x_t = mean * mask + (1-mask) * x_t
+        x_t = x_t_minus_1 * mask_3c + x_t * (1 - mask_3c)
     return x_t
 
 
@@ -156,7 +148,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         # )
 
         # Denoise using DDPM sampling
-        inpainted = sample_ddpm(model, noise_scheduler, noisy_images, masks, num_timesteps=50)
+        inpainted = sample_ddpm(model, noise_scheduler, noisy_images, masks, num_timesteps=1000)
 
         # # --- Save first 8 inpainted samples ---
         # N = min(8, inpainted.shape[0])  # just to be safe if batch < 8

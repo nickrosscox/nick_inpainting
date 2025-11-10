@@ -1,117 +1,89 @@
 import os
-import json
-import random
-from glob import glob
 from typing import Dict, Any, Optional
-from PIL import Image
-from torch.utils.data import Dataset
+import torch
 from torchvision import transforms
+from torchvision.datasets import CelebA as TorchvisionCelebA
 
 
-class CelebADataset(Dataset):
+class CelebADataset(TorchvisionCelebA):
     """
-    Leak-proof, deterministic CelebA dataset wrapper.
-    - Expects images under: <data_path>/celeba/img_align_celeba/
-    - Saves celeba_split.json in the same directory as this file
-    - Guarantees identical train/val/test splits across runs & scripts
+    Wrapper around torchvision.datasets.CelebA that:
+    - Returns dict format compatible with existing pipeline
+    - Maps 'val' split to 'valid' for torchvision
+    - Provides default transforms matching original behavior
+    - Enables subclassing for specialized datasets
     """
-
+    
+    SPLIT_MAP = {
+        'train': 'train',
+        'val': 'valid',      # Map val → valid
+        'test': 'test',
+        'all': 'all'
+    }
+    
     def __init__(
         self,
-        root_dir: str,                     # e.g., DataConfig.data_path → "./assets/datasets"
-        split: str = "train",
+        root_dir: str,
+        split: str = 'train',
         image_size: int = 256,
         transform: Optional[transforms.Compose] = None,
-        download: bool = False,            # kept for API parity
-        verify_integrity: bool = True,     # unused, for API parity
+        download: bool = False,
+        verify_integrity: bool = True,
     ):
-        self.root_dir = root_dir
+        """
+        Args:
+            root_dir: Path to CelebA dataset directory
+            split: One of ['train', 'val', 'test', 'all']
+            image_size: Target image size for resizing
+            transform: Optional torchvision transform pipeline
+            download: If True, download dataset if missing
+            verify_integrity: Verify dataset integrity (unused, kept for API compatibility)
+        """
+        # Validate and map split
+        if split not in self.SPLIT_MAP:
+            raise ValueError(f"Invalid split '{split}'. Must be one of {list(self.SPLIT_MAP.keys())}.")
+        
+        torchvision_split = self.SPLIT_MAP[split]
+        
+        # Store for later use
         self.split = split
         self.image_size = image_size
-
-        # ------------------------------------------------------------------
-        # 1. Locate the true CelebA folder and split file path
-        # ------------------------------------------------------------------
-        celeba_root = os.path.join(root_dir, "celeba")
-        image_dir = os.path.join(celeba_root, "img_align_celeba")
-
-        # Save split file in the same directory as this Python file
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        split_file = os.path.join(script_dir, "celeba_split.json")
-
-        # Ensure images exist
-        if not os.path.exists(image_dir):
-            raise FileNotFoundError(
-                f"[ERROR] Expected images under: {image_dir}\n"
-                f"Please verify your DataConfig.data_path points to './assets/datasets'."
-            )
-
-        # ------------------------------------------------------------------
-        # 2. Create or load a deterministic split file
-        # ------------------------------------------------------------------
-        if not os.path.exists(split_file):
-            print(f"[INFO] No split file found at {split_file}. Creating one now (deterministic).")
-
-            all_imgs = sorted(glob(os.path.join(image_dir, "*.jpg")))
-            if not all_imgs:
-                raise FileNotFoundError(f"No .jpg files found under {image_dir}")
-
-            random.seed(42)  # fixed for determinism
-            random.shuffle(all_imgs)
-
-            n = len(all_imgs)
-            train_end = int(0.8 * n)
-            val_end = int(0.9 * n)
-            split_dict = {
-                "train": all_imgs[:train_end],
-                "val":   all_imgs[train_end:val_end],
-                "test":  all_imgs[val_end:],
-            }
-
-            with open(split_file, "w") as f:
-                json.dump(split_dict, f, indent=2)
-            print(f"[INFO] Saved persistent split file ({n} images) → {split_file}")
-        else:
-            with open(split_file) as f:
-                split_dict = json.load(f)
-
-        if split not in split_dict:
-            raise ValueError(f"Invalid split '{split}'. Must be one of {list(split_dict.keys())}.")
-
-        self.file_list = split_dict[split]
-
-        # ------------------------------------------------------------------
-        # 3. Define default transforms
-        # ------------------------------------------------------------------
+        
+        # Default transforms if none provided
         if transform is None:
             transform = transforms.Compose([
                 transforms.Resize((image_size, image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
             ])
-        self.transform = transform
-
-        # ------------------------------------------------------------------
-        # 4. Cache filenames
-        # ------------------------------------------------------------------
-        self.filename = [os.path.basename(f) for f in self.file_list]
-
-        print(f"[INFO] Loaded CelebA split '{split}' with {len(self.file_list)} images.")
-        print(f"[INFO] Split file path: {split_file}")
-
-    # ----------------------------------------------------------------------
-    # 5. Sample retrieval
-    # ----------------------------------------------------------------------
+        
+        # Initialize parent with torchvision split name
+        super().__init__(
+            root=root_dir,
+            split=torchvision_split,
+            target_type='attr',  # Required param, we don't use attributes
+            transform=transform,
+            download=download
+        )
+    
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        path = self.file_list[idx]
-        image = Image.open(path).convert("RGB")
-        image = self.transform(image)
-
+        """
+        Override to return dict format instead of tuple.
+        
+        Returns:
+            Dict with keys:
+                - 'image': Transformed image tensor
+                - 'filename': Original filename (e.g., '000001.jpg')
+                - 'idx': Index in dataset
+        """
+        # Call parent to get (image, attr)
+        image, _ = super().__getitem__(idx)
+        
+        # Get filename from internal filename list
+        filename = self.filename[idx]
+        
         return {
-            "image": image,
-            "filename": self.filename[idx],
-            "idx": idx,
+            'image': image,
+            'filename': filename,
+            'idx': idx,
         }
-
-    def __len__(self) -> int:
-        return len(self.file_list)
